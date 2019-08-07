@@ -1,6 +1,7 @@
 (ns kafka-streams-the-clojure-way.core
   (:require [jackdaw.streams :as js]
             [jackdaw.client :as jc]
+            [jackdaw.admin :as ja]
             [jackdaw.serdes.edn :refer [serde]]))
 
 
@@ -10,6 +11,9 @@
    "default.key.serde"         "jackdaw.serdes.EdnSerde"
    "default.value.serde"       "jackdaw.serdes.EdnSerde"
    "cache.max.bytes.buffering" "0"})
+
+
+(def admin-client (ja/->AdminClient kafka-config))
 
 
 (defn make-purchase! [amount]
@@ -23,6 +27,13 @@
 
 
 (comment
+
+  ;; create the "purchase-made" topic
+  (ja/create-topics! admin-client {:topic-name "purchase-made"
+                                   :partition-count 1
+                                   :replication-factor 1
+                                   :topic-config {}})
+
 
   ;; Publish a few
   (make-purchase! 10)
