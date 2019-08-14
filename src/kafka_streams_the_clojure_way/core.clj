@@ -101,9 +101,6 @@
       (js/to large-transaction-made-topic)))
 
 
-;; humble purchase messages look like this:
-; {:user-id 1234
-;  :amount  20}
 (def humble-donation-made-transducer
   (comp
     (filter (fn [[_ donation]]
@@ -111,6 +108,15 @@
     (map (fn [[key donation]]
            [key {:user-id (:user-id donation)
                  :amount (int (/ (:donation-amount-cents donation) 100))}]))))
+
+
+(defn make-humble-donation! [amount-cents]
+  (let [user-id  (rand-int 10000)
+        id       (rand-int 1000)]
+    (with-open [producer (jc/producer kafka-config serdes)]
+      @(jc/produce! producer purchase-made-topic id {:amount-cents amount-cents
+                                                     :user-id user-id
+                                                     :donation-date "2019-01-01"}))))
 
 
 (defn more-complicated-topology [builder]
