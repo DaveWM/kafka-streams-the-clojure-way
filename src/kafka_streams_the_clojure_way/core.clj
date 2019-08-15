@@ -11,7 +11,7 @@
             [willa.specs :as ws]
             [clojure.spec.alpha :as s]))
 
-
+;; The config for our Kafka Streams app
 (def kafka-config
   {"application.id" "kafka-streams-the-clojure-way"
    "bootstrap.servers" "localhost:9092"
@@ -19,10 +19,13 @@
    "default.value.serde" "jackdaw.serdes.EdnSerde"
    "cache.max.bytes.buffering" "0"})
 
+;; Serdes tell Kafka how to serialize/deserialize messages
+;; We'll just keep them as EDN
 (def serdes
   {:key-serde (serde)
    :value-serde (serde)})
 
+;; Each topic needs a config. The important part to note is the :topic-name key.
 (def purchase-made-topic
   (merge {:topic-name "purchase-made"
           :partition-count 1
@@ -44,11 +47,14 @@
           :topic-config {}}
          serdes))
 
-
+;; An admin client is needed to do things like create and delete topics
 (def admin-client (ja/->AdminClient kafka-config))
 
 
+;; Part 1 - Simple Topology
+
 (defn make-purchase! [amount]
+  "Publish a message to the purchase-made topic, with the specified amount"
   (let [purchase-id (rand-int 10000)
         user-id     (rand-int 10000)
         quantity    (inc (rand-int 10))]
@@ -58,8 +64,8 @@
                                                               :user-id user-id
                                                               :quantity quantity}))))
 
-;; TODO - maybe get rid of this - use the UI instead
 (defn view-messages [topic]
+  "View the messages on the given topic"
   (with-open [consumer (jc/subscribed-consumer (assoc kafka-config "group.id" (str (java.util.UUID/randomUUID)))
                                                [topic])]
     (jc/seek-to-beginning-eager consumer)
@@ -77,15 +83,19 @@
       (js/to large-transaction-made-topic)))
 
 
-(defn start! [topology-fn]
+(defn start! []
+  "Starts the simple topology"
   (let [builder (js/streams-builder)]
-    (topology-fn builder)
+    (simple-topology builder)
     (doto (js/kafka-streams builder kafka-config)
       (js/start))))
 
 (defn stop! [kafka-streams-app]
+  "Stops the given KafkaStreams application"
   (js/close kafka-streams-app))
 
+
+;; Part 2 - Transducers
 
 (def purchase-made-transducer
   (comp
@@ -94,12 +104,10 @@
     (map (fn [[key purchase]]
            [key (select-keys purchase [:amount :user-id])]))))
 
-
 (defn simple-topology-with-transducer [builder]
   (-> (js/kstream builder purchase-made-topic)
       (transduce-stream purchase-made-transducer)
       (js/to large-transaction-made-topic)))
-
 
 (def humble-donation-made-transducer
   (comp
@@ -109,15 +117,14 @@
            [key {:user-id (:user-id donation)
                  :amount (int (/ (:donation-amount-cents donation) 100))}]))))
 
-
 (defn make-humble-donation! [amount-cents]
-  (let [user-id  (rand-int 10000)
-        id       (rand-int 1000)]
+  "Publishes a message to humble-donation-made, with the specified amount"
+  (let [user-id (rand-int 10000)
+        id      (rand-int 1000)]
     (with-open [producer (jc/producer kafka-config serdes)]
-      @(jc/produce! producer purchase-made-topic id {:amount-cents amount-cents
-                                                     :user-id user-id
-                                                     :donation-date "2019-01-01"}))))
-
+      @(jc/produce! producer humble-donation-made-topic id {:donation-amount-cents amount-cents
+                                                            :user-id user-id
+                                                            :donation-date "2019-01-01"}))))
 
 (defn more-complicated-topology [builder]
   (js/merge
@@ -126,6 +133,8 @@
     (-> (js/kstream builder humble-donation-made-transducer)
         (transduce-stream humble-donation-made-transducer))))
 
+
+;; Part 3 - Willa
 
 (def entities
   {:topic/purchase-made (assoc purchase-made-topic ::w/entity-type :topic)
@@ -151,6 +160,9 @@
 
 (comment
 
+  ;; Part 1 - Simple Topology
+
+
   ;; create the "purchase-made" and "large-transaction-made" topics
   (ja/create-topics! admin-client [purchase-made-topic large-transaction-made-topic])
 
@@ -174,22 +186,39 @@
   ;; Stop the topology
   (stop! kafka-streams-app)
 
+
+  ;; Part 2 - Transducers
+
+
   ;; Check that the purchase-made-transducer works as expected
   (into []
         purchase-made-transducer
-        [[1 {:purchase-id 1 :user-id 2 :amount 10}]
-         [3 {:purchase-id 3 :user-id 4 :amount 500}]])
+        [[1 {:purchase-id 1 :user-id 2 :amount 10 :quantity 1}]
+         [3 {:purchase-id 3 :user-id 4 :amount 500 :quantity 100}]])
 
 
-  (ja/create-topics! admin-client [humble-donation-made-topic])
+  ;; Part 3 - Willa
 
 
   ;; Visualise the topology
   (wv/view-topology topology)
 
   ;; Start topology
-  (js/start
-    (w/build-topology! (js/streams-builder) topology))
+  (let [builder (js/streams-builder)]
+    (w/build-topology! builder topology)
+    (js/start (js/kafka-streams builder kafka-config)))
+
+
+  ;; Create the humble-donation-made topic
+  (ja/create-topics! admin-client [humble-donation-made-topic])
+
+
+  ;; Publish a couple of messages to the input topics
+  (make-purchase! 200)
+  (make-humble-donation! 15000)
+
+  ;; Check that messages appear on the large-transaction-made output topics
+  (view-messages large-transaction-made-topic)
 
   ;; Run an experiment
   (def experiment-results
@@ -204,10 +233,8 @@
                                                               :donation-amount-cents 15000
                                                               :donation-date "2019-01-02"}}]}))
 
-
   ;; Visualise experiment result
   (wv/view-topology experiment-results)
-
 
   ;; View results as data
   (->> experiment-results
