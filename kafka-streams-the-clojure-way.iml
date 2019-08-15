@@ -192,6 +192,6 @@
     <orderEntry type="library" name="Leiningen: tailrecursion/cljs-priority-map:1.2.1" level="project" />
     <orderEntry type="library" name="Leiningen: tigris:0.1.1" level="project" />
     <orderEntry type="library" name="Leiningen: vvvvalvalval/scope-capture:0.1.4" level="project" />
-    <orderEntry type="library" name="Leiningen: willa:0.1.0" level="project" />
+    <orderEntry type="library" name="Leiningen: willa:0.1.1-SNAPSHOT" level="project" />
   </component>
 </module>

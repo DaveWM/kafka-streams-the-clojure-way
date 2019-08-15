@@ -5,5 +5,5 @@
             :url "https://www.eclipse.org/legal/epl-2.0/"}
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [fundingcircle/jackdaw "0.6.4"]
-                 [willa "0.1.0"]]
+                 [willa "0.1.1-SNAPSHOT"]]
   :repl-options {:init-ns kafka-streams-the-clojure-way.core})
