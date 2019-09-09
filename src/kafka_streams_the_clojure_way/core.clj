@@ -178,7 +178,7 @@
   (view-messages purchase-made-topic)
 
   ;; Start the topology
-  (def kafka-streams-app (start! simple-topology))
+  (def kafka-streams-app (start!))
 
   ;; You should see 2 messages on the large-transaction-made-topic topic
   (view-messages large-transaction-made-topic)
